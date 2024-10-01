@@ -141,9 +141,9 @@ def unfollow(username):
 @app.route("/remove_user/<username>", methods=["POST"])
 @login_required
 def remove_user(username):
-    form = EmptyForm()
     if current_user.username != username:
         return redirect(url_for("index"))
+    form = EmptyForm()
     if form.validate_on_submit():
         user = db.session.scalar(
             sa.select(User).where(User.username == username))
