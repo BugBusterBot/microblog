@@ -216,8 +216,10 @@ def remove_post(id):
 @login_required
 def edit_post(id):
     post = db.session.scalar(sa.select(Post).where(Post.id == id))
-    if post.author.id != current_user.id:
-        return (url_for("index"))
+    if post is None:
+        return redirect(url_for("index"))
+    elif post.author.id != current_user.id:
+        return redirect(url_for("index"))
     form = EditPostForm()
     if form.validate_on_submit():
         post.body = form.body.data
