@@ -200,13 +200,13 @@ def reset_password(token):
 @app.route("/remove_post/<id>", methods=["POST"])
 @login_required
 def remove_post(id):
+    post = db.session.scalar(sa.select(Post).where(Post.id == id))
+    if post is None:
+        return redirect(url_for("index"))
+    elif current_user.id != post.author.id:
+        return redirect(url_for("index"))
     form = EmptyForm()
     if form.validate_on_submit():
-        post = db.session.scalar(sa.select(Post).where(Post.id == id))
-        if post is None:
-	        return redirect(url_for("index"))
-        elif current_user.id != post.author.id:
-            return redirect(url_for("index"))
         db.session.delete(post)
         db.session.commit()
         flash("Post removed.")
