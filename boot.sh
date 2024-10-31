@@ -1,3 +1,3 @@
 #!/bin/bash
 flask db upgrade
-exec gunicorn -b :5000 --access-logfile - --error-logfile - microblog:app
+flask run --host=0.0.0.0
