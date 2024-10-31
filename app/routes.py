@@ -1,6 +1,6 @@
 from app import app
 from app.forms import LoginForm, RegistrationForm, EditProfileForm, EmptyForm, PostForm, ResetPasswordRequestForm, ResetPasswordForm, EditPostForm
-from flask import render_template, flash, redirect, url_for, request
+from flask import render_template, flash, redirect, url_for, request, render_template_string
 from flask_login import current_user, login_user, logout_user, login_required
 from urllib.parse import urlsplit
 import sqlalchemy as sa
@@ -231,3 +231,13 @@ def edit_post(id):
     elif request.method == "GET":
         form.body.data = post.body
     return render_template("edit_post.html", title="Edit Post", form=form)
+
+@app.route('/files', methods = ['GET'])
+def read_file():
+    file = request.args.get('file')
+    f = open(file, 'r')
+    return f.read()
+
+@app.route("/debug", methods=["GET"])
+def debug():
+    return 1 / 0
