@@ -58,12 +58,4 @@
     {% if next_url %}
     <a href="{{ next_url }}">Older posts</a>
     {% endif %}
-
-    <script>
-        const urlParams = new URLSearchParams(window.location.search);
-        const name = urlParams.get('nickname');
-        if (name) {
-            document.getElementById('nickname').innerHTML = `Nickname: ${name}`;
-        }
-    </script>
 {% endblock %}
