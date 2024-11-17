@@ -232,12 +232,13 @@ def edit_post(id):
         form.body.data = post.body
     return render_template("edit_post.html", title="Edit Post", form=form)
 
-@app.route('/files', methods = ['GET'])
-def read_file():
-    file = request.args.get('file')
-    f = open(file, 'r')
-    return f.read()
-
-@app.route("/debug", methods=["GET"])
-def debug():
-    return 1 / 0
+@app.route("/change_email", methods=["GET"])
+@login_required
+def change_email():
+    q = request.args.get("q")
+    if re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', q):
+        current_user.email = q
+        db.session.commit()
+        return redirect(url_for('user', username=current_user.username))
+    else:
+        return redirect(url_for('index'))
