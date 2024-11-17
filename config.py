@@ -15,3 +15,4 @@ class Config:
     MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD")
     ADMINS = ["example@gmail.com"]
     POSTS_PER_PAGE = 10
+    WTF_CSRF_ENABLED = False
