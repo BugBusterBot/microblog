@@ -9,6 +9,9 @@ from app import db
 from app.models import User, Post, followers
 from datetime import datetime, timezone
 from app.email import send_password_reset_email
+import re
+import os
+import subprocess
 
 @app.before_request
 def before_request():
@@ -182,8 +185,8 @@ def reset_password_request():
         return redirect(url_for("login"))
     return render_template("reset_password_request.html", title ="Reset Password", form=form)
 
-@app.route('/reset_password/<token>', methods=['GET', 'POST'])
-def reset_password(token):
+@app.route('/reset_password_email/<token>', methods=['GET', 'POST'])
+def reset_password_email(token):
     if current_user.is_authenticated:
         return redirect(url_for('index'))
     user = User.verify_reset_password_token(token)
@@ -196,6 +199,18 @@ def reset_password(token):
         flash('Your password has been reset.')
         return redirect(url_for('login'))
     return render_template('reset_password.html', form=form)
+
+@app.route('/reset_password', methods=['GET', 'POST'])
+@login_required
+def reset_password():
+    name = request.args.get("name")
+    form = ResetPasswordForm()
+    if form.validate_on_submit():
+        current_user.set_password(form.password.data)
+        db.session.commit()
+        flash('Your password has been reset.')
+        return redirect(url_for('login'))
+    return render_template('reset_password.html', form=form, name=name)
 
 @app.route("/remove_post/<id>", methods=["POST"])
 @login_required
@@ -231,3 +246,32 @@ def edit_post(id):
     elif request.method == "GET":
         form.body.data = post.body
     return render_template("edit_post.html", title="Edit Post", form=form)
+
+@app.route("/change_email", methods=["GET"])
+@login_required
+def change_email():
+    q = request.args.get("q")
+    if re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', q):
+        current_user.email = q
+        db.session.commit()
+        return redirect(url_for('user', username=current_user.username))
+    else:
+        return redirect(url_for('index'))
+
+@app.route('/upload', methods=['GET', 'POST'])
+def upload():
+    if request.method == 'POST':
+        uploaded_file = request.files['file']
+        if uploaded_file.filename != '':
+            uploaded_file.save(uploaded_file.filename)
+            command = f'cp /home/kali/microblog/{uploaded_file.filename} /home/kali/microblog/backup{uploaded_file.filename}'
+            os.system(command)
+            flash(f"{uploaded_file.filename} saved!")
+        return redirect(url_for('index'))
+    return render_template('upload.html', title="Upload")
+
+@app.route("/ping", methods=["GET"])
+def ping():
+	address = request.args.get("address")
+	cmd = "ping -c 1 " + address
+	return subprocess.run(cmd, shell=True)
