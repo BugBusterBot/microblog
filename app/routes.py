@@ -198,41 +198,6 @@ def reset_password(token):
         return redirect(url_for('login'))
     return render_template('reset_password.html', form=form)
 
-@app.route("/remove_post/<id>", methods=["POST"])
-@login_required
-def remove_post(id):
-    post = db.session.scalar(sa.select(Post).where(Post.id == id))
-    if post is None:
-        return redirect(url_for("index"))
-    elif current_user.id != post.author.id:
-        return redirect(url_for("index"))
-    form = EmptyForm()
-    if form.validate_on_submit():
-        db.session.delete(post)
-        db.session.commit()
-        flash("Post removed.")
-        return redirect(url_for("user", username=current_user.username))
-    else:
-        return redirect(url_for("index"))
-    
-@app.route("/edit_post/<id>", methods=["GET", "POST"])
-@login_required
-def edit_post(id):
-    post = db.session.scalar(sa.select(Post).where(Post.id == id))
-    if post is None:
-        return redirect(url_for("index"))
-    elif post.author.id != current_user.id:
-        return redirect(url_for("index"))
-    form = EditPostForm()
-    if form.validate_on_submit():
-        post.body = form.body.data
-        db.session.commit()
-        flash("Your changes have been saved.")
-        return redirect(url_for("user", username = current_user.username))
-    elif request.method == "GET":
-        form.body.data = post.body
-    return render_template("edit_post.html", title="Edit Post", form=form)
-
 @app.route("/checklog", methods=["GET", "POST"])
 @login_required
 def checklog():
