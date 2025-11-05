@@ -2,409 +2,119 @@
 {% import "bootstrap_wtf.html" as wtf %}
 
 {% block content %}
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <title>{{ title or "Check Log" }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Nếu bạn đã có bootstrap ở base.html thì có thể bỏ link này -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .score-badge { min-width: 3rem; display: inline-block; text-align: center; }
+    .wrap-pre { white-space: pre-wrap; }
+  </style>
+</head>
+<body class="bg-light">
 <div class="container py-4">
-  <div class="d-flex align-items-center mb-3">
-    <div>
-      <h1 class="h4 mb-0">Kiểm tra bảo mật của hệ thống</h1>
-      <div class="text-muted small">Sử dụng AI. Kết quả sẽ được lưu vào cơ sở dữ liệu (backend xử lý lưu).</div>
-    </div>
-  </div>
+  <h1 class="h3 mb-3">Check Log — Zero Trust 800-207 (Điều 5)</h1>
 
-  <!-- Manual classification -->
-  <div class="mb-4">
-    <h5 class="mb-3">Phân loại thủ công</h5>
-
-    {% if manual_form %}
-      {{ wtf.quick_form(manual_form, action=url_for('checklog_manual'), method='post', id='manual-form') }}
-    {% else %}
-      <form id="manual-form" class="row g-2" onsubmit="return false;">
-        <div class="col-12">
-          <label for="manual-log-text" class="form-label visually-hidden">Nội dung log</label>
-          <textarea id="manual-log-text" class="form-control" rows="4" placeholder="Nhập vào đây..."></textarea>
-        </div>
-        <div class="col-12 d-flex gap-2">
-          <button id="btn-manual-submit" type="button" class="btn btn-danger">Phân loại &amp; Lưu</button>
-          <button id="btn-manual-clear" type="button" class="btn btn-outline-secondary ms-auto">Xóa Form</button>
-        </div>
-        <div class="col-12">
-          <div id="manual-alert" aria-live="polite" class="mt-2"></div>
-        </div>
-      </form>
+  <!-- Flash messages -->
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      <div class="mb-3">
+        {% for m in messages %}
+          <div class="alert alert-info py-2 mb-2">{{ m }}</div>
+        {% endfor %}
+      </div>
     {% endif %}
-  </div>
+  {% endwith %}
 
-  <hr>
+  <!-- Form POST tới /checklog: nhận text hoặc file -->
+  <form action="{{ url_for('checklog') }}" method="post" enctype="multipart/form-data" class="card shadow-sm">
+    <div class="card-body">
+      <div class="mb-3">
+        <label for="text" class="form-label">Dán nội dung log (tùy chọn)</label>
+        <textarea id="text" name="text" class="form-control mono" rows="8" placeholder="Dán log vào đây...">{{ request.form.text or "" }}</textarea>
+        <div class="form-text">Nếu để trống, bạn có thể chọn file bên dưới; nếu cả hai đều trống, hệ thống sẽ thử đọc file <code>checklog.txt</code> mẫu.</div>
+      </div>
 
-  <!-- Upload area -->
-  <div class="mb-4">
-    <h5 class="mb-3">Tải lên và phân loại log (Tự động)</h5>
-    <div class="text-muted small mb-2">Chọn file (Hệ thống sẽ tự động tìm cột nếu cần). Tất cả định dạng được chấp nhận. Giới hạn 200MB mỗi file.</div>
+      <div class="mb-3">
+        <label for="file" class="form-label">Hoặc chọn file log (tùy chọn)</label>
+        <input id="file" name="file" type="file" class="form-control" />
+      </div>
 
-    <div id="drop-area" class="border rounded-3 p-3 bg-light d-flex align-items-center justify-content-between" tabindex="0" role="region" aria-label="Drop files here">
-      <div class="d-flex align-items-center">
-        <div class="me-3" style="font-size:1.2rem;">☁️</div>
-        <div>
-          <div class="fw-semibold">Kéo thả file vào đây</div>
-          <div class="text-muted small">Tất cả định dạng — kích thước tối đa 200MB / file</div>
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Phân tích</button>
+        <a href="{{ url_for('checklog') }}" class="btn btn-outline-secondary">Làm mới</a>
+      </div>
+    </div>
+  </form>
+
+  <!-- Kết quả phân tích -->
+  {% if result %}
+    <div class="card shadow-sm mt-4">
+      <div class="card-header">
+        <strong>Kết quả</strong>
+      </div>
+      <div class="card-body">
+        <!-- Tiêu chí vượt ngưỡng -->
+        <h5 class="h6">Tiêu chí vượt ngưỡng</h5>
+        {% if result.matches %}
+          <ul class="list-group list-group-flush mb-3">
+            {% for m in result.matches %}
+              <li class="list-group-item">
+                <div class="d-flex justify-content-between align-items-start">
+                  <div>
+                    <div class="fw-semibold">{{ m.name }}</div>
+                    <div class="text-muted small">{{ m.desc }}</div>
+                  </div>
+                  <span class="badge text-bg-success score-badge">{{ '{:.3f}'.format(m.score) }}</span>
+                </div>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <div class="text-muted">Không phát hiện tiêu chí nào vượt ngưỡng.</div>
+        {% endif %}
+
+        <!-- Bảng toàn bộ điểm -->
+        <h5 class="h6 mt-3">Điểm theo toàn bộ tiêu chí</h5>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle">
+            <thead>
+              <tr>
+                <th style="width: 40%">Tiêu chí</th>
+                <th>Mô tả</th>
+                <th class="text-end" style="width: 10%">Score</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for c in result.all %}
+                <tr>
+                  <td class="fw-semibold">{{ c.name }}</td>
+                  <td class="text-muted small">{{ c.desc }}</td>
+                  <td class="text-end mono">{{ '{:.3f}'.format(c.score) }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
+
+        <!-- Log đã phân tích -->
+        {% if raw %}
+          <h5 class="h6 mt-3">Log đã phân tích</h5>
+          <pre class="p-3 bg-light border rounded wrap-pre mono">{{ raw }}</pre>
+        {% endif %}
       </div>
-
-      <div class="d-flex align-items-center gap-2">
-        <label class="btn btn-outline-secondary mb-0" for="file-input">Browse files</label>
-        <!-- accept attribute removed so all file types are allowed -->
-        <input id="file-input" type="file" multiple hidden />
-      </div>
     </div>
-
-    <ul id="file-list" class="list-group list-group-flush mt-3" aria-live="polite"></ul>
-
-    <div class="mt-3 d-flex gap-2">
-      <button id="btn-upload" class="btn btn-primary">Upload</button>
-      <button id="btn-cancel-all" class="btn btn-outline-secondary">Hủy tất cả</button>
-      <div id="upload-result" class="ms-3 flex-grow-1"></div>
-    </div>
-  </div>
-
-  <hr>
-
-  <div class="d-flex justify-content-between align-items-center">
-    <div class="text-muted small">Lưu ý: upload sẽ gửi file tới backend để xử lý; backend trả về trạng thái thành công / thất bại cho từng file.</div>
-    <div>
-      <button id="btn-delete-all" class="btn btn-outline-danger btn-sm">Xóa toàn bộ dữ liệu</button>
-    </div>
-  </div>
+  {% endif %}
 </div>
 
-<script>
+<!-- Nếu đã có bundle ở base.html thì bỏ script này -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
 
-(function () {
-  const useMock = false; // set to true to simulate backend responses
-  const API_MANUAL = '/api/checklog/manual';
-  const API_UPLOAD = '/api/checklog/upload';
-  const API_DELETE_ALL = '/api/logs';
-  const MAX_FILE_BYTES = 200 * 1024 * 1024; // 200MB
-
-  // Elements
-  const manualForm = document.getElementById('manual-form');
-  const manualText = document.getElementById('manual-log-text');
-  const manualAlert = document.getElementById('manual-alert');
-  const btnManualSubmit = document.getElementById('btn-manual-submit');
-  const btnManualClear = document.getElementById('btn-manual-clear');
-
-  const dropArea = document.getElementById('drop-area');
-  const fileInput = document.getElementById('file-input');
-  const fileList = document.getElementById('file-list');
-  const btnUpload = document.getElementById('btn-upload');
-  const btnCancelAll = document.getElementById('btn-cancel-all');
-  const uploadResult = document.getElementById('upload-result');
-
-  const btnDeleteAll = document.getElementById('btn-delete-all');
-
-  // State: map id -> { file, xhr, status, node }
-  const filesState = new Map();
-
-  function uid() { return Math.random().toString(36).slice(2,9); }
-  function escapeHtml(s){ if (!s) return ''; return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-
-  // Manual form handlers
-  if (btnManualSubmit) {
-    btnManualSubmit.addEventListener('click', async () => {
-      if (!manualText) return;
-      const text = manualText.value.trim();
-      manualAlert.innerHTML = '';
-      if (!text) {
-        manualAlert.innerHTML = '<div class="alert alert-warning py-1">Vui lòng nhập nội dung log trước khi lưu.</div>';
-        return;
-      }
-
-      manualAlert.innerHTML = '<div class="spinner-border spinner-border-sm text-secondary" role="status"></div> Đang gửi...';
-
-      try {
-        if (useMock) {
-          await new Promise(r => setTimeout(r, 700));
-          manualAlert.innerHTML = '<div class="alert alert-success py-1">Đã phân loại và lưu (mock).</div>';
-          manualText.value = '';
-          return;
-        }
-
-        const res = await fetch(API_MANUAL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text })
-        });
-        const data = await res.json();
-        if (res.ok && data.success) {
-          manualAlert.innerHTML = `<div class="alert alert-success py-1">Lưu thành công: ${escapeHtml(data.message || '')}</div>`;
-          manualText.value = '';
-        } else {
-          manualAlert.innerHTML = `<div class="alert alert-danger py-1">Lỗi: ${escapeHtml(data.message || data.error || 'Không xác định')}</div>`;
-        }
-      } catch (err) {
-        console.error(err);
-        manualAlert.innerHTML = '<div class="alert alert-danger py-1">Lỗi mạng khi gửi dữ liệu. Vui lòng thử lại.</div>';
-      }
-    });
-  }
-
-  if (btnManualClear) {
-    btnManualClear.addEventListener('click', () => {
-      if (manualText) manualText.value = '';
-      if (manualAlert) manualAlert.innerHTML = '';
-    });
-  }
-
-  // Drag & drop + file selection
-  ['dragenter','dragover','dragleave','drop'].forEach(evt => {
-    dropArea.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); });
-  });
-
-  ['dragenter','dragover'].forEach(evt => {
-    dropArea.addEventListener(evt, () => dropArea.classList.add('border-primary', 'bg-white'));
-  });
-  ['dragleave','drop'].forEach(evt => {
-    dropArea.addEventListener(evt, () => dropArea.classList.remove('border-primary', 'bg-white'));
-  });
-
-  dropArea.addEventListener('drop', e => {
-    const dt = e.dataTransfer;
-    if (!dt) return;
-    addFiles(dt.files);
-  });
-
-  if (fileInput) {
-    fileInput.addEventListener('change', () => {
-      addFiles(fileInput.files);
-      fileInput.value = '';
-    });
-  }
-
-  function addFiles(list) {
-    for (const f of Array.from(list)) {
-      const id = uid();
-      const sizeOk = f.size <= MAX_FILE_BYTES;
-      // accept ALL file types: no extension/type check performed client-side
-      const status = sizeOk ? 'ready' : 'invalid';
-      const reason = sizeOk ? null : 'File quá lớn (vượt quá 200MB)';
-      const item = renderFileItem(id, f, status, reason);
-      filesState.set(id, { file: f, xhr: null, status, node: item });
-    }
-  }
-
-  function renderFileItem(id, file, status, reason=null) {
-    const li = document.createElement('li');
-    li.className = 'list-group-item d-flex flex-column gap-2';
-    li.dataset.fileId = id;
-
-    const top = document.createElement('div');
-    top.className = 'd-flex align-items-start';
-
-    const meta = document.createElement('div');
-    meta.className = 'flex-grow-1';
-    meta.innerHTML = `<div class="fw-semibold">${escapeHtml(file.name)}</div><div class="text-muted small">${(file.size/1024).toFixed(1)} KB • ${escapeHtml(file.type || 'unknown')}</div>`;
-
-    const actions = document.createElement('div');
-    actions.className = 'd-flex gap-2 ms-3';
-
-    const btnStart = document.createElement('button');
-    btnStart.className = 'btn btn-sm btn-primary';
-    btnStart.type = 'button';
-    btnStart.textContent = 'Upload';
-    btnStart.addEventListener('click', () => uploadSingle(id));
-
-    const btnRemove = document.createElement('button');
-    btnRemove.className = 'btn btn-sm btn-outline-secondary';
-    btnRemove.type = 'button';
-    btnRemove.textContent = 'Xóa';
-    btnRemove.addEventListener('click', () => cancelAndRemove(id));
-
-    actions.appendChild(btnStart);
-    actions.appendChild(btnRemove);
-
-    top.appendChild(meta);
-    top.appendChild(actions);
-
-    const progressWrap = document.createElement('div');
-    progressWrap.className = 'progress';
-    progressWrap.style.height = '10px';
-    progressWrap.innerHTML = `<div class="progress-bar" role="progressbar" style="width:0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>`;
-
-    const statusRow = document.createElement('div');
-    statusRow.className = 'd-flex justify-content-between align-items-center';
-    statusRow.innerHTML = `<div class="small text-muted">${status === 'invalid' ? 'Không hợp lệ' : 'Sẵn sàng' }${reason ? ': ' + escapeHtml(reason) : ''}</div><div class="small" id="status-${id}"></div>`;
-
-    li.appendChild(top);
-    li.appendChild(progressWrap);
-    li.appendChild(statusRow);
-
-    fileList.appendChild(li);
-    return li;
-  }
-
-  function cancelAndRemove(id) {
-    const st = filesState.get(id);
-    if (!st) return;
-    if (st.xhr) {
-      try { st.xhr.abort(); } catch (e) {}
-    }
-    if (st.node) st.node.remove();
-    filesState.delete(id);
-  }
-
-  function updateProgressUI(id, percent) {
-    const st = filesState.get(id);
-    if (!st) return;
-    const bar = st.node.querySelector('.progress-bar');
-    bar.style.width = percent + '%';
-    bar.setAttribute('aria-valuenow', String(percent));
-  }
-
-  function setStatusText(id, text, klass) {
-    const el = document.getElementById('status-' + id);
-    if (!el) return;
-    el.innerHTML = `<span class="${klass ? klass : 'text-muted'}">${escapeHtml(text)}</span>`;
-  }
-
-  // Upload single file via XMLHttpRequest for progress
-  function uploadSingle(id) {
-    const st = filesState.get(id);
-    if (!st) return;
-    if (st.status === 'invalid') {
-      setStatusText(id, 'Không hợp lệ', 'text-warning');
-      return;
-    }
-    if (st.status === 'uploading') return;
-
-    const xhr = new XMLHttpRequest();
-    st.xhr = xhr;
-    st.status = 'uploading';
-    setStatusText(id, 'Đang tải lên...', 'text-primary');
-
-    xhr.upload.addEventListener('progress', e => {
-      if (e.lengthComputable) {
-        const pct = Math.round((e.loaded / e.total) * 100);
-        updateProgressUI(id, pct);
-      }
-    });
-
-    xhr.onreadystatechange = () => {
-      if (xhr.readyState === 4) {
-        st.xhr = null;
-        if (xhr.status >= 200 && xhr.status < 300) {
-          let resp = {};
-          try { resp = JSON.parse(xhr.responseText || '{}'); } catch (e) { resp = { success: false, message: 'Invalid JSON' }; }
-          if (resp.success) {
-            updateProgressUI(id, 100);
-            setStatusText(id, 'Thành công', 'text-success');
-            appendUploadResult(st.file.name || '', true, resp.message || 'Hoàn tất');
-          } else {
-            setStatusText(id, 'Thất bại: ' + (resp.message || 'Server lỗi'), 'text-danger');
-            appendUploadResult(st.file.name || '', false, resp.message || 'Thất bại');
-          }
-        } else {
-          setStatusText(id, 'HTTP ' + xhr.status, 'text-danger');
-          appendUploadResult(st.file.name || '', false, 'HTTP ' + xhr.status);
-        }
-      }
-    };
-
-    const form = new FormData();
-    form.append('file', st.file, st.file.name);
-
-    if (useMock) {
-      simulateUploadMock(id, st.file);
-      return;
-    }
-
-    xhr.open('POST', API_UPLOAD, true);
-    xhr.send(form);
-  }
-
-  // Upload all ready files
-  if (btnUpload) {
-    btnUpload.addEventListener('click', () => {
-      for (const [id, st] of filesState.entries()) {
-        if (st.status === 'ready') uploadSingle(id);
-      }
-    });
-  }
-
-  if (btnCancelAll) {
-    btnCancelAll.addEventListener('click', () => {
-      for (const [id, st] of Array.from(filesState.entries())) {
-        if (st.xhr) {
-          try { st.xhr.abort(); } catch (e) {}
-        }
-        if (st.node) st.node.remove();
-        filesState.delete(id);
-      }
-      uploadResult.innerHTML = '';
-    });
-  }
-
-  function appendUploadResult(filename, ok, message) {
-    const div = document.createElement('div');
-    div.className = ok ? 'text-success small' : 'text-danger small';
-    div.innerHTML = `<strong>${escapeHtml(filename)}</strong>: ${escapeHtml(message || '')}`;
-    uploadResult.appendChild(div);
-  }
-
-  function simulateUploadMock(id, file) {
-    setStatusText(id, 'Đang tải lên...', 'text-primary');
-    let pct = 0;
-    const t = setInterval(() => {
-      pct += Math.floor(10 + Math.random() * 15);
-      if (pct > 95) pct = 95;
-      updateProgressUI(id, pct);
-    }, 200);
-    setTimeout(() => {
-      clearInterval(t);
-      updateProgressUI(id, 100);
-      const ok = Math.random() > 0.15;
-      if (ok) {
-        setStatusText(id, 'Thành công', 'text-success');
-        appendUploadResult(file.name, true, 'Mock upload thành công');
-      } else {
-        setStatusText(id, 'Thất bại (mock)', 'text-danger');
-        appendUploadResult(file.name, false, 'Mock upload thất bại');
-      }
-    }, 1000 + Math.random() * 1600);
-  }
-
-  // Delete all handler
-  if (btnDeleteAll) {
-    btnDeleteAll.addEventListener('click', async () => {
-      if (!confirm('Bạn có chắc muốn xóa toàn bộ dữ liệu? Hành động này không thể hoàn tác.')) return;
-      try {
-        if (useMock) {
-          alert('Đã xóa (mock).');
-          return;
-        }
-        const res = await fetch(API_DELETE_ALL, { method: 'DELETE' });
-        if (!res.ok) throw new Error('Server trả về ' + res.status);
-        alert('Xóa thành công.');
-      } catch (err) {
-        console.error(err);
-        alert('Không thể xóa dữ liệu: ' + (err.message || err));
-      }
-    });
-  }
-
-  // keyboard support for drop area to open file picker
-  dropArea.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Enter' || ev.key === ' ') {
-      ev.preventDefault();
-      fileInput.click();
-    }
-  });
-
-  // prevent form submit page reload if manual_form exists and was rendered by wtf.quick_form:
-  if (manualForm) {
-    manualForm.addEventListener('submit', function (e) {
-      e.preventDefault();
-      if (btnManualSubmit) btnManualSubmit.click();
-      return false;
-    });
-  }
-})();
-</script>
 {% endblock %}
