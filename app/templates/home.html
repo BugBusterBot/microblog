@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% import "bootstrap_wtf.html" as wtf %}
+
+{% block content %}
+<div class="container">
+  <div class="row align-items-center my-4">
+    <div class="col-auto">
+      <h1 class="h3 mb-0">Kiểm tra bảo mật hệ thống</h1>
+    </div>
+  </div>
+
+  <!-- Optional search form provided by server-side (uses your bootstrap_wtf macro) -->
+  {% if search_form %}
+  <div class="row mb-3">
+    <div class="col-12">
+      {{ wtf.quick_form(search_form, action=url_for('datasources'), method="get", id="search-form") }}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Dashboard card -->
+  <div class="row">
+    <div class="col-12">
+      <div class="card mb-4">
+        <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-start gap-3">
+          <div>
+            <div class="text-muted small">Tổng log</div>
+            <div id="total-articles" class="display-6 fw-bold" aria-live="polite">
+              <div class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></div>
+              Đang tải...
+            </div>
+            <div class="mt-2">
+              <span id="total-articles-change" class="badge bg-light text-danger border">—</span>
+            </div>
+          </div>
+
+          <div class="flex-fill">
+            <form class="d-flex w-100" role="search" onsubmit="return false;">
+              <input class="form-control me-2" type="search" placeholder="Tìm kiếm..." aria-label="Search">
+              <button class="btn btn-outline-secondary" type="button">Xem tất cả log</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Analysis by labels (two boxes) -->
+  <div class="row mb-3">
+    <div class="col-12">
+      <h5 class="mb-3">Phân tích theo từng nhãn</h5>
+    </div>
+
+    <div class="col-12 col-md-6">
+      <div class="card mb-3 h-100">
+        <div class="card-body d-flex flex-column justify-content-between">
+          <div>
+            <h6 class="card-subtitle mb-2 text-muted">Số lượng log đã nhập</h6>
+            <div id="logs-count" class="fs-3 fw-semibold" aria-live="polite">
+              <div class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></div>
+              Đang tải...
+            </div>
+          </div>
+          <div class="d-flex justify-content-between align-items-center mt-3">
+            <small id="logs-count-change" class="text-muted">—</small>
+            <a href="{{ url_for('datasources') }}" class="btn btn-outline-primary btn-sm">Xem chi tiết</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-md-6">
+      <div class="card mb-3 h-100">
+        <div class="card-body d-flex flex-column justify-content-between">
+          <div>
+            <h6 class="card-subtitle mb-2 text-muted">Số log đưa ra hệ thống không đạt bảo mật</h6>
+            <div id="insecure-logs" class="fs-3 fw-semibold" aria-live="polite">
+              <div class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></div>
+              Đang tải...
+            </div>
+          </div>
+          <div class="d-flex justify-content-between align-items-center mt-3">
+            <small id="insecure-logs-change" class="text-muted">—</small>
+            <a href="{{ url_for('datasources', filter='insecure') }}" class="btn btn-outline-danger btn-sm">Xem chi tiết</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Small inline script to populate dynamic numbers via fetch.
+     Backend endpoints expected:
+       GET /api/dashboard  -> { total_articles: number, today_change: number }
+       GET /api/logs/summary -> { logs_count: number, logs_count_change: number, insecure_logs: number, insecure_logs_change: number }
+-->
+<script>
+  (function () {
+    const API_DASHBOARD = '/api/dashboard';
+    const API_LOGS_SUMMARY = '/api/logs/summary';
+
+    function fmt(n){ return (n === null || n === undefined) ? '—' : n.toLocaleString('vi-VN'); }
+
+    function setLoading(id){ const el = document.getElementById(id); if (el) el.innerHTML = '<div class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></div> Đang tải...'; }
+
+    setLoading('total-articles');
+    setLoading('logs-count');
+    setLoading('insecure-logs');
+
+    function safeJsonFetch(url){
+      return fetch(url, { cache: 'no-store' }).then(r=>{
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      });
+    }
+
+    Promise.all([safeJsonFetch(API_DASHBOARD).catch(()=>null), safeJsonFetch(API_LOGS_SUMMARY).catch(()=>null)])
+      .then(([dash, logs]) => {
+        if (dash) {
+          const totalEl = document.getElementById('total-articles');
+          const changeEl = document.getElementById('total-articles-change');
+          if (totalEl) totalEl.textContent = fmt(dash.total_articles ?? 0);
+          if (changeEl) changeEl.textContent = (dash.today_change >= 0 ? '↑ ' : '↓ ') + Math.abs(dash.today_change ?? 0) + ' hôm nay';
+        } else {
+          document.getElementById('total-articles').textContent = '—';
+          document.getElementById('total-articles-change').textContent = '—';
+        }
+
+        if (logs) {
+          const logsEl = document.getElementById('logs-count');
+          const logsChangeEl = document.getElementById('logs-count-change');
+          const insecureEl = document.getElementById('insecure-logs');
+          const insecureChangeEl = document.getElementById('insecure-logs-change');
+
+          if (logsEl) logsEl.textContent = fmt(logs.logs_count ?? 0);
+          if (logsChangeEl) logsChangeEl.textContent = (logs.logs_count_change >= 0 ? '↑ ' : '↓ ') + Math.abs(logs.logs_count_change ?? 0) + ' hôm nay';
+
+          if (insecureEl) insecureEl.textContent = fmt(logs.insecure_logs ?? 0);
+          if (insecureChangeEl) insecureChangeEl.textContent = (logs.insecure_logs_change >= 0 ? '↑ ' : '↓ ') + Math.abs(logs.insecure_logs_change ?? 0) + ' hôm nay';
+        } else {
+          document.getElementById('logs-count').textContent = '—';
+          document.getElementById('logs-count-change').textContent = '—';
+          document.getElementById('insecure-logs').textContent = '—';
+          document.getElementById('insecure-logs-change').textContent = '—';
+        }
+      })
+      .catch(err => {
+        console.error('Error loading dashboard', err);
+        document.getElementById('total-articles').textContent = '—';
+        document.getElementById('logs-count').textContent = '—';
+        document.getElementById('insecure-logs').textContent = '—';
+      });
+
+    // Optional: auto-refresh every 60s
+    setInterval(()=> {
+      // re-run the same logic (simple approach: reload page data)
+      fetch(API_DASHBOARD, { cache: 'no-store' }).then(r=>r.ok? r.json(): null).then(dash=>{
+        if (dash) {
+          document.getElementById('total-articles').textContent = fmt(dash.total_articles ?? 0);
+          document.getElementById('total-articles-change').textContent = (dash.today_change >= 0 ? '↑ ' : '↓ ') + Math.abs(dash.today_change ?? 0) + ' hôm nay';
+        }
+      }).catch(()=>{});
+      fetch(API_LOGS_SUMMARY, { cache: 'no-store' }).then(r=>r.ok? r.json(): null).then(logs=>{
+        if (logs) {
+          document.getElementById('logs-count').textContent = fmt(logs.logs_count ?? 0);
+          document.getElementById('logs-count-change').textContent = (logs.logs_count_change >= 0 ? '↑ ' : '↓ ') + Math.abs(logs.logs_count_change ?? 0) + ' hôm nay';
+          document.getElementById('insecure-logs').textContent = fmt(logs.insecure_logs ?? 0);
+          document.getElementById('insecure-logs-change').textContent = (logs.insecure_logs_change >= 0 ? '↑ ' : '↓ ') + Math.abs(logs.insecure_logs_change ?? 0) + ' hôm nay';
+        }
+      }).catch(()=>{});
+    }, 60000);
+  })();
+</script>
+{% endblock %}
